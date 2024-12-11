@@ -4,11 +4,16 @@ FROM golang:1.20 AS builder
 # تعيين مجلد العمل داخل الحاوية
 WORKDIR /app
 
-# نسخ جميع الملفات من المجلد المحلي إلى الحاوية
+# نسخ ملفات go.mod و go.sum فقط أولاً
+COPY go.mod go.sum ./
+
+# تثبيت المكتبات المطلوبة
+RUN go mod tidy
+
+# نسخ باقي الملفات
 COPY . .
 
 # بناء التطبيق باستخدام Go
-RUN go mod tidy
 RUN go build -o proxy-app main.go
 
 # الصورة النهائية
