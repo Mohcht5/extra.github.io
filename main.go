@@ -1,94 +1,73 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"m3u-streamer/handlers"
-	"m3u-streamer/store"
-	"m3u-streamer/updater"
-	"m3u-streamer/utils"
 	"net/http"
 	"os"
-	"time"
-	"strconv"
 	"strings"
-)
 
-var (
-	userName    = os.Getenv("USER_NAME")
-	userPassword = os.Getenv("USER_PASSWORD")
-	sessionDurationStr = os.Getenv("SESSION_DURATION")
-	sessionExpiry time.Time
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cm := store.NewConcurrencyManager()
-
-	// Initialize updater
-	utils.SafeLogln("Starting updater...")
-	_, err := updater.Initialize(ctx)
+	// تحميل متغيرات البيئة من ملف .env
+	err := godotenv.Load()
 	if err != nil {
-		utils.SafeLogFatalf("Error initializing updater: %v", err)
+		fmt.Println("Error loading .env file")
 	}
 
-	// Set timezone from environment variable
-	if tz := os.Getenv("TZ"); tz != "" {
-		var err error
-		time.Local, err = time.LoadLocation(tz)
-		if err != nil {
-			utils.SafeLogf("Error loading location '%s': %v\n", tz, err)
-		}
+	// الحصول على المتغيرات من البيئة
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // قيمة افتراضية إذا لم يتم تحديد المنفذ
 	}
 
-	// Calculate session expiration
-	parsedDuration, err := time.ParseDuration(sessionDurationStr)
-	if err != nil {
-		utils.SafeLogFatalf("Invalid session duration: %v", err)
-	}
-	sessionExpiry = time.Now().Add(parsedDuration)
+	user := os.Getenv("USER")
+	pass := os.Getenv("PASS")
 
-	// Set up HTTP handlers
-	utils.SafeLogln("Setting up HTTP handlers...")
+	// إعداد نقطة النهاية
 	http.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
-		handlers.M3UHandler(w, r)
-	})
-	http.HandleFunc("/p/", func(w http.ResponseWriter, r *http.Request) {
-		handlers.StreamHandler(w, r, cm)
+		// استخراج اسم المستخدم وكلمة المرور من الرابط
+		reqUser := r.URL.Query().Get("user")
+		reqPass := r.URL.Query().Get("pass")
+
+		// تحقق من وجود اسم المستخدم وكلمة المرور
+		if reqUser == "" || reqPass == "" {
+			http.Error(w, "مفقود اسم المستخدم أو كلمة المرور", http.StatusBadRequest)
+			return
+		}
+
+		// تحقق من صحة بيانات الدخول
+		if reqUser != user || reqPass != pass {
+			http.Error(w, "بيانات الدخول غير صحيحة", http.StatusUnauthorized)
+			return
+		}
+
+		// إذا كانت البيانات صحيحة، قم بإرجاع قائمة M3U
+		m3uURL := os.Getenv("M3U_URL")
+		if m3uURL == "" {
+			http.Error(w, "M3U URL غير محدد", http.StatusInternalServerError)
+			return
+		}
+
+		// قم بجلب محتويات قائمة M3U من الرابط
+		resp, err := http.Get(m3uURL)
+		if err != nil {
+			http.Error(w, "خطأ أثناء تحميل قائمة M3U", http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+
+		// نسخ محتويات M3U إلى العميل
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		w.WriteHeader(resp.StatusCode)
+		_, _ = w.Write([]byte(strings.TrimSpace(m3uURL)))
 	})
 
-	// Add login handler
-	http.HandleFunc("/login", loginHandler)
-
-	// Start the server
-	utils.SafeLogln(fmt.Sprintf("Server is running on port %s...", os.Getenv("PORT")))
-	err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), nil)
+	// تشغيل الخادم
+	fmt.Println("Server is running on port:", port)
+	err = http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
 	if err != nil {
-		utils.SafeLogFatalf("HTTP server error: %v", err)
+		fmt.Printf("HTTP server error: %v\n", err)
 	}
-}
-
-func loginHandler(w http.ResponseWriter, r *http.Request) {
-	// Check if username and password match
-	username := r.FormValue("username")
-	password := r.FormValue("password")
-
-	// Validate user credentials
-	if username != userName || password != userPassword {
-		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
-		return
-	}
-
-	// Check if the session has expired
-	if time.Now().After(sessionExpiry) {
-		http.Error(w, "Session expired", http.StatusUnauthorized)
-		return
-	}
-
-	// Return success response
-	w.Write([]byte("Login successful"))
 }
