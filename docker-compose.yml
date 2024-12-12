@@ -1,0 +1,14 @@
+version: "3.9"
+services:
+  iptv-proxy:
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    environment:
+      STREAMS: >
+        {
+          "mbc2": "https://mbc-2-prod-dub-enc.edgenextcdn.net/out/v1/a3ad4b53b3ff4a95b4acba9527b280ba/index.mpd?aws.manifestfilter=video_height:144-720;video_codec:H264",
+          "kids": "http://185.235.165.69:80/play/live.php?mac=00:1A:79:03:B2:C6&stream=724260&extension=ts",
+          "living": "http://185.235.165.69:80/play/live.php?mac=00:1A:79:03:B2:C6&stream=724259&extension=ts"
+        }
