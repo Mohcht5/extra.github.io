@@ -1,20 +1,27 @@
-# استخدم صورة Go الرسمية كأساس
-FROM golang:1.20-alpine
+# استخدم صورة أساسية من Ubuntu
+FROM ubuntu:20.04
 
-# تعيين دليل العمل في الحاوية
-WORKDIR /app
+# تعيين البيئة لتجنب الأسئلة التفاعلية
+ENV DEBIAN_FRONTEND=noninteractive
 
-# نسخ ملفات المشروع إلى الحاوية
-COPY . .
+# تحديث النظام وتثبيت الحزم المطلوبة
+RUN apt-get update && \
+    apt-get install -y \
+    wget \
+    curl \
+    gnupg \
+    lsb-release \
+    sudo \
+    unzip \
+    tar \
+    git \
+    && apt-get clean
 
-# تثبيت المكتبات المطلوبة
-RUN go mod tidy
+# تحميل السكربت من GitHub
+RUN wget https://raw.githubusercontent.com/iptvpanel/Xtream-Codes-1.60.0/master/installer.sh -O /installer.sh
 
-# بناء التطبيق
-RUN go build -o proxy-app .
+# إعطاء صلاحيات التنفيذ للسكربت
+RUN chmod +x /installer.sh
 
-# تعيين المنفذ الذي سيعمل عليه التطبيق
-EXPOSE 8080
-
-# تشغيل التطبيق
-CMD ["./proxy-app"]
+# تشغيل السكربت عند بدء الحاوية
+CMD ["/installer.sh"]
