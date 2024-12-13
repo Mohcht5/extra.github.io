@@ -1,6 +1,9 @@
 # استخدام صورة Ubuntu
 FROM ubuntu:20.04
 
+# تعيين متغير البيئة لتجنب التفاعل أثناء تثبيت tzdata
+ENV DEBIAN_FRONTEND=noninteractive
+
 # تحديث النظام وتثبيت المتطلبات
 RUN apt-get update && apt-get install -y \
     python3 \
