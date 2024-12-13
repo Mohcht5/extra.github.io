@@ -35,224 +35,86 @@ class col:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-def generate(length=32): return ''.join(random.choice(rChoice) for i in range(length))
+def printColor(msg, color):
+    print(f"{color}{msg}{col.ENDC}")
+
+def checkFile(filename):
+    if not os.path.isfile(filename):
+        printColor(f"{filename} not found!", col.FAIL)
+        sys.exit(1)
+
+def checkDir(dirname):
+    if not os.path.isdir(dirname):
+        printColor(f"{dirname} not found!", col.FAIL)
+        sys.exit(1)
+
+def isRoot():
+    if os.geteuid() != 0:
+        printColor("You must run this as root!", col.FAIL)
+        sys.exit(1)
 
 def getIP():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    return s.getsockname()[0]
+    ip = ""
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+    except:
+        pass
+    return ip
 
-def printc(rText, rColour=col.OKBLUE, rPadding=0):
-    rLeft = int(30-(len(rText)/2))
-    rRight = (60-rLeft-len(rText))
-    print("%s |--------------------------------------------------------------| %s" % (rColour, col.ENDC))
-    for i in range(rPadding): print ("%s |                                                              | %s" % (rColour, col.ENDC))
-    print("%s | %s%s%s | %s" % (rColour, " " * rLeft, rText, " " * rRight, col.ENDC))
-    for i in range(rPadding): print ("%s |                                                              | %s" % (rColour, col.ENDC))
-    print("%s |--------------------------------------------------------------| %s" % (rColour, col.ENDC))
-    print(" ")
+def runCommand(command):
+    try:
+        subprocess.check_call(command, shell=True)
+    except subprocess.CalledProcessError as e:
+        printColor(f"Command failed: {e}", col.FAIL)
+        sys.exit(1)
+
+def getRandomString(length=10):
+    return ''.join(random.choice(rChoice) for i in range(length))
+
+def getServerVersion():
+    version = ""
+    try:
+        version = subprocess.check_output(["lsb_release", "-r"]).decode("utf-8").split(":")[1].strip()
+    except:
+        pass
+    return version
+
+def main():
+    version = getServerVersion()
+    if version not in rVersions:
+        printColor(f"Unsupported version: {version}", col.FAIL)
+        sys.exit(1)
+
+    printColor("Starting installation...", col.OKGREEN)
+
+    for package in rPackages:
+        runCommand(f"apt-get install -y {package}")
+
+    for package in rRemove:
+        runCommand(f"apt-get remove -y {package}")
+
+    # Add MySQL configuration
+    with open("/etc/mysql/my.cnf", "w") as f:
+        f.write(rMySQLCnf)
+
+    # Add Redis configuration
+    with open("/etc/redis/redis.conf", "w") as f:
+        f.write(rRedisConfig)
+
+    # Add sysctl configuration
+    with open("/etc/sysctl.conf", "a") as f:
+        f.write(rSysCtl)
+
+    # Add systemd service
+    with open("/etc/systemd/system/xui.service", "w") as f:
+        f.write(rSystemd)
+
+    # Reload systemd and enable the service
+    runCommand("systemctl daemon-reload")
+    runCommand("systemctl enable xui")
+    runCommand("systemctl start xui")
+
+    printColor("Installation complete!", col.OKGREEN)
 
 if __name__ == "__main__":
-    ##################################################
-    # START                                          #
-    ##################################################
-    
-    try: rVersion = os.popen('lsb_release -sr').read().strip()
-    except: rVersion = None
-    if not rVersion in rVersions:
-        printc("Unsupported Operating System")
-        sys.exit(1)
-    
-    if not os.path.exists("./xui.tar.gz") and not os.path.exists("./xui_trial.tar.gz"):
-        print("Fatal Error: xui.tar.gz is missing. Please download it from XUI billing panel.")
-        sys.exit(1)
-    
-    printc("XUI", col.OKGREEN, 2)
-    rHost = "127.0.0.1" ; rServerID = 1 ; rUsername = generate() ; rPassword = generate()
-    rDatabase = "xui"
-    rPort = 3306
-
-    if os.path.exists("/home/xui/"):
-        printc("XUI Directory Exists!")
-        while True:
-            rAnswer = input("Continue and overwrite? (Y / N) : ")
-            if rAnswer.upper() in ["Y", "N"]: break
-        if rAnswer == "N": sys.exit(1)
-   
-    ##################################################
-    # UPGRADE                                        #
-    ##################################################
-    
-    printc("Preparing Installation")
-    for rFile in ["/var/lib/dpkg/lock-frontend", "/var/cache/apt/archives/lock", "/var/lib/dpkg/lock", "/var/lib/apt/lists/lock"]:
-        if os.path.exists(rFile):
-            try: os.remove(rFile)
-            except: pass
-    printc("Updating system")
-    os.system("sudo apt-get update")
-    os.system("sudo DEBIAN_FRONTEND=noninteractive apt-get -yq install software-properties-common")
-    if rVersion in rVersions:
-        printc("Adding repo: Ubuntu %s" % rVersion)
-        os.system("sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8")
-        os.system("sudo add-apt-repository -y 'deb [arch=amd64,arm64,ppc64el] http://ams2.mirrors.digitalocean.com/mariadb/repo/10.6/ubuntu %s main'" % rVersions[rVersion])
-    os.system("sudo add-apt-repository -y ppa:maxmind/ppa")
-    os.system("sudo apt-get update")
-    for rPackage in rRemove:
-        printc("Removing %s" % rPackage)
-        os.system("sudo apt-get remove %s -y" % rPackage)
-    for rPackage in rPackages:
-        printc("Installing %s" % rPackage)
-        os.system("sudo DEBIAN_FRONTEND=noninteractive apt-get -yq install %s" % rPackage)
-    try: subprocess.check_output("getent passwd xui".split())
-    except:
-        printc("Creating user")
-        os.system("sudo adduser --system --shell /bin/false --group --disabled-login xui")
-    if not os.path.exists("/home/xui"): os.mkdir("/home/xui")
-    
-    ##################################################
-    # INSTALL                                        #
-    ##################################################
-    
-    printc("Installing XUI")
-    if os.path.exists("./xui.tar.gz"):
-        os.system('sudo tar -zxvf "./xui.tar.gz" -C "/home/xui/"')
-        if not os.path.exists("/home/xui/status"):
-            printc("Failed to extract! Exiting")
-            sys.exit(1)
-    elif os.path.exists("./xui_trial.tar.gz"):
-        os.system('sudo tar -zxvf "./xui_trial.tar.gz" -C "/home/xui/"')
-        if not os.path.exists("/home/xui/status"):
-            printc("Failed to extract! Exiting")
-            sys.exit(1)
-    
-    ##################################################
-    # MYSQL                                          #
-    ##################################################
-    
-    printc("Configuring MySQL")
-    rCreate = True
-    if os.path.exists("/etc/mysql/my.cnf"):
-        if open("/etc/mysql/my.cnf", "r").read(5) == "# XUI": rCreate = False
-    if rCreate:
-        rFile = io.open("/etc/mysql/my.cnf", "w", encoding="utf-8")
-        rFile.write(rMySQLCnf)
-        rFile.close()
-        os.system("sudo service mariadb restart")
-    rExtra = ""
-    rRet = os.system("mysql -u root -e \"SELECT VERSION();\"")
-    if rRet != 0:
-        while True:
-            rExtra = " -p%s" %  input("Root MySQL Password: ")
-            rRet = os.system("mysql -u root%s -e \"SELECT VERSION();\"" % rExtra)
-            if rRet == 0: break
-            else: printc("Invalid password! Please try again.")
-    os.system('sudo mysql -u root%s -e "DROP DATABASE IF EXISTS xui; CREATE DATABASE IF NOT EXISTS xui;"' % rExtra)
-    os.system('sudo mysql -u root%s -e "DROP DATABASE IF EXISTS xui_migrate; CREATE DATABASE IF NOT EXISTS xui_migrate;"' % rExtra)
-    os.system('sudo mysql -u root%s xui < "/home/xui/bin/install/database.sql"' % rExtra)
-    os.system('sudo mysql -u root%s -e "CREATE USER \'%s\'@\'localhost\' IDENTIFIED BY \'%s\';"' % (rExtra, rUsername, rPassword))
-    os.system('sudo mysql -u root%s -e "GRANT ALL PRIVILEGES ON xui.* TO \'%s\'@\'localhost\';"' % (rExtra, rUsername))
-    os.system('sudo mysql -u root%s -e "GRANT ALL PRIVILEGES ON xui_migrate.* TO \'%s\'@\'localhost\';"' % (rExtra, rUsername))
-    os.system('sudo mysql -u root%s -e "GRANT ALL PRIVILEGES ON mysql.* TO \'%s\'@\'localhost\';"' % (rExtra, rUsername))
-    os.system('sudo mysql -u root%s -e "GRANT GRANT OPTION ON xui.* TO \'%s\'@\'localhost\';"' % (rExtra, rUsername))
-    os.system('sudo mysql -u root%s -e "CREATE USER \'%s\'@\'127.0.0.1\' IDENTIFIED BY \'%s\';"' % (rExtra, rUsername, rPassword))
-    os.system('sudo mysql -u root%s -e "GRANT ALL PRIVILEGES ON xui.* TO \'%s\'@\'127.0.0.1\';"' % (rExtra, rUsername))
-    os.system('sudo mysql -u root%s -e "GRANT ALL PRIVILEGES ON xui_migrate.* TO \'%s\'@\'127.0.0.1\';"' % (rExtra, rUsername))
-    os.system('sudo mysql -u root%s -e "GRANT ALL PRIVILEGES ON mysql.* TO \'%s\'@\'127.0.0.1\';"' % (rExtra, rUsername))
-    os.system('sudo mysql -u root%s -e "GRANT GRANT OPTION ON xui.* TO \'%s\'@\'127.0.0.1\';"' % (rExtra, rUsername))
-    os.system('sudo mysql -u root%s -e "FLUSH PRIVILEGES;"' % rExtra)
-    rConfigData = rConfig % (rUsername, rPassword)
-    rFile = io.open("/home/xui/config/config.ini", "w", encoding="utf-8")
-    rFile.write(rConfigData)
-    rFile.close()
-
-    ##################################################
-    # CONFIGURE                                      #
-    ##################################################
-    
-    printc("Configuring System")
-    if not "/home/xui/" in open("/etc/fstab").read():
-        rFile = io.open("/etc/fstab", "a", encoding="utf-8")
-        rFile.write("\ntmpfs /home/xui/content/streams tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=90% 0 0\ntmpfs /home/xui/tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=6G 0 0")
-        rFile.close()
-    if os.path.exists("/etc/init.d/xuione"): os.remove("/etc/init.d/xuione")
-    if os.path.exists("/etc/systemd/system/xui.service"): os.remove("/etc/systemd/system/xui.service")
-    if not os.path.exists("/etc/systemd/system/xuione.service"):
-        rFile = io.open("/etc/systemd/system/xuione.service", "w", encoding="utf-8")
-        rFile.write(rSystemd)
-        rFile.close()
-        os.system("sudo chmod +x /etc/systemd/system/xuione.service")
-        os.system("sudo systemctl daemon-reload")
-        os.system("sudo systemctl enable xuione")
-    print("Custom sysctl.conf - If you have your own custom sysctl.conf, type N or it will be overwritten. If you don't know what a sysctl configuration is, type Y as it will correctly set your TCP settings and open file limits.")
-    print(" ")
-    while True:
-        rAnswer = input("Overwrite sysctl configuration? Recommended! (Y / N): ")
-        if rAnswer.upper() in ["Y", "N"]: break
-    if rAnswer.upper() == "Y":
-        try: os.system("sudo modprobe ip_conntrack")
-        except: pass
-        try:
-            rFile = io.open("/etc/sysctl.conf", "w", encoding="utf-8")
-            rFile.write(rSysCtl)
-            rFile.close()
-            os.system("sudo sysctl -p >/dev/null 2>&1")
-            rFile = open("/home/xui/config/sysctl.on", "w")
-            rFile.close()
-        except: print("Failed to write to sysctl file.")
-    else:
-        if os.path.exists("/home/xui/config/sysctl.on"): os.remove("/home/xui/config/sysctl.on")
-    if not "DefaultLimitNOFILE=655350" in open("/etc/systemd/system.conf").read():
-        os.system("sudo echo \"\nDefaultLimitNOFILE=655350\" >> \"/etc/systemd/system.conf\"")
-        os.system("sudo echo \"\nDefaultLimitNOFILE=655350\" >> \"/etc/systemd/user.conf\"")
-    if not os.path.exists("/home/xui/bin/redis/redis.conf"):
-        rFile = io.open("/home/xui/bin/redis/redis.conf", "w", encoding="utf-8")
-        rFile.write(rRedisConfig)
-        rFile.close()
-    
-    ##################################################
-    # ACCESS CODE                                    #
-    ##################################################
-    
-    rCodeDir = "/home/xui/bin/nginx/conf/codes/"
-    rHasAdmin = None
-    for rCode in os.listdir(rCodeDir):
-        if rCode.endswith(".conf"):
-            if rCode.split(".")[0] == "setup": os.remove(rCodeDir + "setup.conf")
-            elif "/home/xui/admin" in open(rCodeDir + rCode, "r").read(): rHasAdmin = rCode
-    if not rHasAdmin:
-        rCode = generate(8)
-        os.system('sudo mysql -u root%s -e "USE xui; INSERT INTO access_codes(code, type, enabled, groups) VALUES(\'%s\', 0, 1, \'[1]\');"' % (rExtra, rCode))
-        rTemplate = open(rCodeDir + "template").read()
-        rTemplate = rTemplate.replace("#WHITELIST#", "")
-        rTemplate = rTemplate.replace("#TYPE#", "admin")
-        rTemplate = rTemplate.replace("#CODE#", rCode)
-        rTemplate = rTemplate.replace("#BURST#", "500")
-        rFile = io.open("%s%s.conf" % (rCodeDir, rCode), "w", encoding="utf-8")
-        rFile.write(rTemplate)
-        rFile.close()
-    else: rCode = rHasAdmin.split(".")[0]
-    
-    ##################################################
-    # FINISHED                                       #
-    ##################################################
-    
-    os.system("sudo mount -a  >/dev/null 2>&1")
-    os.system("sudo chown xui:xui -R /home/xui  >/dev/null 2>&1")
-    os.system("sudo systemctl daemon-reload")
-    os.system("sudo systemctl start xuione")
-    
-    time.sleep(10)
-    os.system("sudo /home/xui/status 1")
-    os.system("sudo /home/xui/bin/php/bin/php /home/xui/includes/cli/startup.php >/dev/null 2>&1")
-    
-    rFile = io.open(rPath + "/credentials.txt", "w", encoding="utf-8")
-    rFile.write("MySQL Username: %s\nMySQL Password: %s" % (rUsername, rPassword))
-    rFile.close()
-    
-    printc("Installation completed!", col.OKGREEN, 2)
-    printc("Continue Setup: http://%s/%s" % (getIP(), rCode))
-    print(" ")
-    printc("Your mysql credentials have been saved to:")
-    printc(rPath + "/credentials.txt")
-    print(" ")
-    printc("Please move this file somewhere safe!")
+    main()
