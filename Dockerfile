@@ -17,6 +17,9 @@ RUN apt-get update && apt-get install -y \
 RUN ln -sf /usr/share/zoneinfo/America/New_York /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata
 
+# إنشاء المجلد /app
+RUN mkdir -p /app
+
 # تنزيل ملف xui.tar.gz من الرابط
 RUN wget -O /app/xui.tar.gz https://www.top4top.me/download/7GjKKDp3vUReZpp/EBnkmWkl6mR0y/xui.tar.gz
 
