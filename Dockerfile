@@ -1,25 +1,25 @@
-# استخدام صورة أساسية من Ubuntu
+# استخدام صورة Ubuntu
 FROM ubuntu:20.04
 
-# تحديث الحزم وتثبيت الأدوات المطلوبة
+# تحديث النظام وتثبيت المتطلبات
 RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    software-properties-common \
     wget \
-    curl \
-    bash \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean
 
-# تعيين مجلد العمل
+# نسخ السكربت إلى الحاوية
+COPY script.py /app/script.py
+
+# تعيين مسار العمل
 WORKDIR /app
 
-# تنزيل السكربت
-RUN wget https://raw.githubusercontent.com/spawk/FIPTV-V2/master/fulliptv.sh
+# تثبيت المكتبات المطلوبة (إن وجدت)
+RUN pip3 install --no-cache-dir some-python-library
 
-# جعل السكربت قابلًا للتنفيذ
-RUN chmod +x fulliptv.sh
-
-# تعيين المنفذ 8080
-EXPOSE 8080
+# كشف المنفذ 80
+EXPOSE 80
 
 # تشغيل السكربت
-CMD ["./fulliptv.sh"]
+CMD ["python3", "script.py"]
