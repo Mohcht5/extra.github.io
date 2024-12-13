@@ -23,8 +23,8 @@ COPY script.py /app/script.py
 # تعيين مسار العمل
 WORKDIR /app
 
-# تثبيت المكتبات المطلوبة (إن وجدت)
-RUN pip3 install --no-cache-dir some-python-library
+# تثبيت مكتبات Python المطلوبة (مثال: Flask)
+RUN pip3 install --no-cache-dir flask
 
 # كشف المنفذ 80
 EXPOSE 80
