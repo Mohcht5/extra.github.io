@@ -1,29 +1,25 @@
-# استخدم صورة أساسية من Ubuntu أو Debian
-FROM ubuntu:latest
+# استخدام صورة أساسية من Ubuntu
+FROM ubuntu:20.04
 
-# إعداد البيئة
-ENV DEBIAN_FRONTEND=noninteractive
-
-# تحديث النظام وتثبيت المتطلبات الأساسية
-RUN apt-get update && apt-get upgrade -y \
-    && apt-get install -y \
-    git \
+# تحديث الحزم وتثبيت الأدوات المطلوبة
+RUN apt-get update && apt-get install -y \
     wget \
     curl \
     bash \
-    && apt-get clean
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# استنساخ المستودع من GitHub
-RUN git clone https://github.com/SlaSerX/FullIPTV /FullIPTV
+# تعيين مجلد العمل
+WORKDIR /app
 
-# الانتقال إلى المجلد المناسب
-WORKDIR /FullIPTV
+# تنزيل السكربت
+RUN wget https://raw.githubusercontent.com/spawk/FIPTV-V2/master/fulliptv.sh
 
-# منح الأذونات للسكربتات
-RUN chmod +x FullIPTV-v2.sh
+# جعل السكربت قابلًا للتنفيذ
+RUN chmod +x fulliptv.sh
 
-# تعيين المنفذ 80
-EXPOSE 80
+# تعيين المنفذ 8080
+EXPOSE 8080
 
-# تنفيذ السكربت
-CMD ["./FullIPTV-v2.sh"]
+# تشغيل السكربت
+CMD ["./fulliptv.sh"]
