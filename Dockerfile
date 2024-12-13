@@ -1,27 +1,29 @@
-# استخدم صورة أساسية من Ubuntu
-FROM ubuntu:20.04
+# استخدم صورة أساسية من Ubuntu أو Debian
+FROM ubuntu:latest
 
-# تعيين البيئة لتجنب الأسئلة التفاعلية
+# إعداد البيئة
 ENV DEBIAN_FRONTEND=noninteractive
 
-# تحديث النظام وتثبيت الحزم المطلوبة
-RUN apt-get update && \
-    apt-get install -y \
+# تحديث النظام وتثبيت المتطلبات الأساسية
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y \
+    git \
     wget \
     curl \
-    gnupg \
-    lsb-release \
-    sudo \
-    unzip \
-    tar \
-    git \
+    bash \
     && apt-get clean
 
-# تحميل السكربت من GitHub
-RUN wget https://raw.githubusercontent.com/iptvpanel/Xtream-Codes-1.60.0/master/installer.sh -O /installer.sh
+# استنساخ المستودع من GitHub
+RUN git clone https://github.com/SlaSerX/FullIPTV /FullIPTV
 
-# إعطاء صلاحيات التنفيذ للسكربت
-RUN chmod +x /installer.sh
+# الانتقال إلى المجلد المناسب
+WORKDIR /FullIPTV
 
-# تشغيل السكربت عند بدء الحاوية
-CMD ["/installer.sh"]
+# منح الأذونات للسكربتات
+RUN chmod +x FullIPTV-v2.sh
+
+# تعيين المنفذ 80
+EXPOSE 80
+
+# تنفيذ السكربت
+CMD ["./FullIPTV-v2.sh"]
